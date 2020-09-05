@@ -1,11 +1,12 @@
 {
-  "name": "redux-playground",
+  "name": "redux-testing-ground",
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
     "dev": "ts-node ./src/index.ts",
-    "build": "tsc -b ./tsconfig.json"
+    "build": "tsc -b ./tsconfig.json",
+    "fmt": "prettier --write ./src/**/*.ts"
   },
   "dependencies": {
     "redux": "^4.0.5"

@@ -1,5 +1,4 @@
 import { applyMiddleware, combineReducers, createStore, Store } from 'redux';
-import { Unionize } from 'utility-types';
 
 /**
  * for each model
@@ -21,19 +20,22 @@ export type Model<
  * for createModel function
  */
 export type ModelCreator = <
-  Name extends string,
   State,
+  Name extends string,
   DexReducer extends Record<string, (state: State, payload: any) => State>,
   M extends Model<Name, State, DexReducer> = Model<Name, State, DexReducer>
 >(m: {
   name: Name;
   state: State;
   reducers: DexReducer;
-}) => {
+}) => ModelCreatorReturn<M>;
+
+type ModelCreatorReturn<M extends Model> = {
   name: M['name'];
   state: M['state'];
-  reducers: {
+  reducer: {
     [K in keyof M['reducers']]: (
+      state: M['state'],
       action: Parameters<M['reducers'][K]>[1] extends undefined
         ? {
             type: K;
@@ -44,20 +46,40 @@ export type ModelCreator = <
           }
     ) => M['state'];
   };
-  actionCreators: {
+  actions: {
     [K in keyof M['reducers']]: Parameters<
       M['reducers'][K]
     >[1] extends undefined
-      ? () => M['state']
-      : (payload: Parameters<M['reducers'][K]>[1]) => M['state'];
+      ? () => { type: K }
+      : (
+          payload: Parameters<M['reducers'][K]>[1]
+        ) => {
+          type: K;
+          payload: Parameters<M['reducers'][K]>[1];
+        };
   };
 };
 
-export type StoreInit = <Models extends Record<string, Model>>(c: {
+export type StoreInit = <
+  Models extends Record<string, ReturnType<ModelCreator>>
+>(c: {
   models: Models;
-}) => {
-  [K in keyof Models]: Models[K];
-}[keyof Models];
+}) => Store<
+  {
+    [K in keyof Models]: Models[K]['state'] extends (infer P)[]
+      ? P[]
+      : Models[K]['state'] extends Record<string, infer V>
+      ? {
+          [L in keyof Models[K]['state']]: V;
+        }
+      : Models[K]['state'];
+  },
+  {
+    [K in keyof Models]: ReturnType<
+      Models[K]['actions'][keyof Models[K]['actions']]
+    >;
+  }[keyof Models]
+>;
 
 export const createModel: ModelCreator = mo => {
   let reducers = {};
@@ -71,30 +93,25 @@ export const createModel: ModelCreator = mo => {
   return undefined as any;
 };
 
-
 export const storeInit: StoreInit = c => {
   return undefined as any;
 };
-
-
 
 const counter = createModel({
   name: 'counter',
   state: {
     count: 0,
-    name: 'asd',
   },
   reducers: {
     inc: (state, payload: number) => ({
       ...state,
       count: state.count + payload,
-      e: 1,
     }),
-    something: state => ({
+    '@counter/returnOne': state => ({
       ...state,
       count: 1,
     }),
-    some: (state, payload: string) => ({
+    same: state => ({
       ...state,
     }),
   },
@@ -102,19 +119,38 @@ const counter = createModel({
 
 const counter2 = createModel({
   name: 'counter2',
-  state: {
-    county: 0,
-  },
+  state: 0,
   reducers: {
-    asd: (state, payload: 'inc' | 'dec') => ({
-      ...state,
-      county: payload === 'inc' ? state.county + 1 : state.county - 1,
-    }),
+    depends: (state, payload: 'inc' | 'dec') =>
+      payload === 'inc' ? state + 1 : state - 1,
   },
+});
+
+const todoList = createModel({
+  name: 'todoList',
+  state: [
+    {
+      name: 'get meat',
+      desc: 'get meat from meat shop',
+    },
+  ],
+  reducers: {
+    addTodo: (state, payload: { name: string; desc: string }) => [
+      ...state,
+      payload,
+    ],
+  },
+});
+
+todoList.actions.addTodo({
+  name: 'meow',
+  desc: 'meow meow',
 });
 
 const store = storeInit({
   models: {
     counter,
+    counter2,
+    todoList,
   },
-});
+})
